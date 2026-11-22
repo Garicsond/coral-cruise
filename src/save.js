@@ -16,6 +16,7 @@ function blank() {
     shells: [],
     cleared: [],
     muted: false,
+    quality: 'auto',
   };
 }
 
@@ -33,6 +34,7 @@ export function sanitize(raw) {
     ? data.cleared.filter((id) => typeof id === 'string')
     : [];
   const cash = Number.isFinite(data.cash) ? Math.max(0, Math.floor(data.cash)) : 0;
+  const quality = data.quality === 'high' || data.quality === 'low' ? data.quality : 'auto';
   return {
     v: 1,
     cash,
@@ -43,6 +45,7 @@ export function sanitize(raw) {
     shells,
     cleared,
     muted: Boolean(data.muted),
+    quality,
   };
 }
 

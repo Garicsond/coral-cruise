@@ -14,8 +14,29 @@ export function paint(geometry, color) {
   return geometry;
 }
 
-export function box(w, h, d, x, y, z, color) {
+function scaleBoxUVs(geometry, w, h, d, tile) {
+  const uv = geometry.getAttribute('uv');
+  const faces = [
+    [d / tile, h / tile],
+    [d / tile, h / tile],
+    [w / tile, d / tile],
+    [w / tile, d / tile],
+    [w / tile, h / tile],
+    [w / tile, h / tile],
+  ];
+  for (let face = 0; face < 6; face += 1) {
+    const [su, sv] = faces[face];
+    for (let i = 0; i < 4; i += 1) {
+      const index = face * 4 + i;
+      uv.setXY(index, uv.getX(index) * su, uv.getY(index) * sv);
+    }
+  }
+  uv.needsUpdate = true;
+}
+
+export function box(w, h, d, x, y, z, color, tile = 2) {
   const geometry = new THREE.BoxGeometry(w, h, d);
+  scaleBoxUVs(geometry, w, h, d, tile);
   geometry.translate(x, y, z);
   return paint(geometry, color);
 }
@@ -81,7 +102,7 @@ export function makeLabel(text) {
   texture.colorSpace = THREE.SRGBColorSpace;
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
   const sprite = new THREE.Sprite(material);
-  sprite.scale.set(9.5, 2.4, 1);
+  sprite.scale.set(6.4, 1.6, 1);
   sprite.position.y = 5.2;
   draw(text);
   sprite.userData.setText = draw;
