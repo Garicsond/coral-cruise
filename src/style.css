@@ -349,6 +349,31 @@ h1 {
 
 #wallet { font-weight: 800; }
 
+.gfx {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  margin: 8px 0 2px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.gfx button {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  background: white;
+  font-weight: 800;
+}
+
+.gfx button.on {
+  background: var(--lagoon);
+  color: white;
+  border-color: var(--lagoon);
+}
+
 #play-btn {
   margin-top: 10px;
   width: 100%;

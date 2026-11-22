@@ -8,6 +8,7 @@ import { Input } from './input.js';
 import { createWorld, MISSIONS, SHELLS, SPAWN } from './layout.js';
 import { bobMarkers, bobShells, makeArch, makeMarker, makeShell } from './markers.js';
 import { drawMinimap } from './minimap.js';
+import { presetFor, resolveQuality } from './quality.js';
 import { loadSave, writeSave } from './save.js';
 
 function dist(x, z, point) {
@@ -25,6 +26,7 @@ export function boot() {
     onGarage: () => game?.openGarage(),
     onCamera: () => game?.requestSnap(),
     onDismiss: () => game?.resume(),
+    onQuality: (level) => game?.setQuality(level),
   });
   const game = new Game(ui);
   try {
@@ -54,29 +56,38 @@ class Game {
     this.snapRequested = false;
     this.car = null;
     this.last = 0;
+    this.fps = 0;
+    this.fpsFrames = 0;
+    this.fpsStamp = 0;
   }
 
   init() {
+    const level = resolveQuality(this.save.quality);
+    this.preset = presetFor(level);
     const canvas = document.getElementById('view');
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: true,
+      antialias: this.preset.antialias,
       alpha: false,
       powerPreference: 'high-performance',
       stencil: false,
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.NoToneMapping;
-    this.renderer.setClearColor(0xc5e7f6, 1);
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 0.96;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = this.preset.shadowSoft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    this.renderer.setClearColor(0xd5e6f2, 1);
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(62, 1, 0.1, 500);
+    this.camera = new THREE.PerspectiveCamera(62, 1, 0.1, 480);
     this.world = createWorld(11);
-    this.city = mountCity(this.scene, this.world);
+    this.city = mountCity(this.scene, this.world, { renderer: this.renderer, preset: this.preset });
     this.spawnCar();
     this.buildActivities();
     this.input.attachTouch();
     this.ui.setMuted(this.save.muted);
+    this.ui.setGraphics(this.preset.level);
     this.ui.setWallet(`Wallet ${money(this.save.cash)} · ${carById(this.save.car).name}`);
     this.ui.setMode('menu');
     this.resize();
@@ -95,7 +106,7 @@ class Game {
     const height = Math.max(1, window.innerHeight);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.preset.pixelRatioCap));
     this.renderer.setSize(width, height, false);
   }
 
@@ -270,7 +281,9 @@ class Game {
       this.mode === 'play' ? this.car.speed : 0,
       this.mode === 'play' ? this.input.throttle : 0,
     );
-    this.city.waterMat.uniforms.uTime.value = time;
+    this.city.tick(time);
+    this.city.updateSun(this.mode === 'menu' ? { x: 8, z: -60 } : this.car);
+    this.sampleFps(now);
     for (const cloud of this.city.clouds) {
       cloud.position.x += dt * 1.4;
       if (cloud.position.x > 130) cloud.position.x = -130;
@@ -541,6 +554,26 @@ class Game {
     this.camera.lookAt(this.lookX, this.lookY, this.lookZ);
   }
 
+  setQuality(level) {
+    if (level !== 'high' && level !== 'low') return;
+    const changed = this.preset.level !== level;
+    this.save.quality = level;
+    this.save = writeSave(this.save);
+    this.ui.setGraphics(level);
+    if (changed) window.location.reload();
+  }
+
+  sampleFps(now) {
+    if (!this.fpsStamp) this.fpsStamp = now;
+    this.fpsFrames += 1;
+    const elapsed = now - this.fpsStamp;
+    if (elapsed >= 500) {
+      this.fps = (this.fpsFrames * 1000) / elapsed;
+      this.fpsFrames = 0;
+      this.fpsStamp = now;
+    }
+  }
+
   getState() {
     return {
       ready: Boolean(this.renderer),
@@ -558,6 +591,9 @@ class Game {
       cleared: [...this.save.cleared],
       mode: this.mode,
       muted: this.save.muted,
+      quality: this.preset?.level ?? 'high',
+      fps: Math.round(this.fps),
+      pixelRatio: this.renderer ? this.renderer.getPixelRatio() : 1,
       canSnap: this.canSnap,
       mission: this.active
         ? { id: this.active.def.id, type: this.active.def.type, index: this.active.index, name: this.active.def.name }

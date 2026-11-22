@@ -20,6 +20,7 @@ Open the link on an iPhone in landscape, or add it to the Home Screen. Tap **Pla
 - **Pier Postcard** asks you to stop at the end of Pelican Pier and tap the camera.
 - Floating seashells add a little cash. The **Garage** unlocks the Sundart and the Palmetto, plus extra paint colors.
 - **Sound** / **Muted** is remembered.
+- **Graphics** on the title screen is High or Low and is remembered. High uses a daylight sky, sun shadows, and a sharper image (softer, larger shadows on a desktop; a lighter shadow map on a phone). Low is for older phones: a gradient sky, smaller shadows, and a lower pixel ratio. The game picks High automatically unless the device looks very small.
 
 Portrait shows a rotate-your-phone hint. The page does not scroll or pinch-zoom while you play.
 
@@ -59,6 +60,7 @@ Pages has to be turned on once for this repository, with **Source: GitHub Action
 
 ## Credits
 
-- City, cars, props, and interface are original procedural low-poly geometry. No ripped models, logos, or brand assets.
+- City, cars, props, and interface are original geometry. No ripped models, logos, or brand assets.
+- Asphalt, sand, sidewalk, plaster, window grids, palm fronds, the water normal map, and the reflection image are generated in the browser. No image files are downloaded, so no CC0 texture pack was needed.
 - All audio (engine, music loop, UI blips, bump) is synthesized with the Web Audio API. No audio files are shipped.
-- [Three.js](https://threejs.org/) (MIT) renders the scene and is bundled at build time.
+- [Three.js](https://threejs.org/) (MIT) renders the scene and is bundled at build time. The High sky uses Three.js's `Sky` shader, the Preetham daylight model as integrated by zz85 from work by Simon Wallner and Martin Upitis.

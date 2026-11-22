@@ -23,6 +23,8 @@ export function createUI(handlers) {
   $('cam-btn').addEventListener('click', () => handlers.onCamera());
   $('result-ok').addEventListener('click', () => handlers.onDismiss());
   $('polaroid-ok').addEventListener('click', () => handlers.onDismiss());
+  $('gfx-high').addEventListener('click', () => handlers.onQuality('high'));
+  $('gfx-low').addEventListener('click', () => handlers.onQuality('low'));
 
   return {
     setReady(message) {
@@ -49,6 +51,12 @@ export function createUI(handlers) {
     },
     setCash(text) {
       $('cash').textContent = text;
+    },
+    setGraphics(level) {
+      $('gfx-high').classList.toggle('on', level === 'high');
+      $('gfx-low').classList.toggle('on', level === 'low');
+      $('gfx-high').setAttribute('aria-pressed', level === 'high' ? 'true' : 'false');
+      $('gfx-low').setAttribute('aria-pressed', level === 'low' ? 'true' : 'false');
     },
     setHud({ cash, shells, objective, timer, warn }) {
       $('cash').textContent = cash;
