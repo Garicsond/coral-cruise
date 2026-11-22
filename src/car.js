@@ -154,37 +154,139 @@ const BUILDERS = {
   palmetto: buildPalmetto,
 };
 
-export function createVehicle(spec, hex) {
-  const built = (BUILDERS[spec.id] || buildBreeze)(hex);
+function clearcoatPaint(hex, source) {
+  return new THREE.MeshPhysicalMaterial({
+    color: hex,
+    map: source?.map || null,
+    normalMap: source?.normalMap || null,
+    roughnessMap: source?.roughnessMap || null,
+    metalness: 0.55,
+    roughness: 0.3,
+    clearcoat: 0.82,
+    clearcoatRoughness: 0.08,
+    envMapIntensity: 1.2,
+  });
+}
+
+function buildFromTemplate(template, hex) {
+  const group = new THREE.Group();
+  const model = template.clone(true);
+  model.rotation.y = Math.PI / 2;
+  const measured = new THREE.Box3().setFromObject(model);
+  const size = measured.getSize(new THREE.Vector3());
+  const targetLength = 4.05;
+  const scale = targetLength / Math.max(size.z, size.x, 0.01);
+  model.scale.setScalar(scale);
+  model.updateMatrixWorld(true);
+  const fitted = new THREE.Box3().setFromObject(model);
+  model.position.y -= fitted.min.y;
+  model.position.x -= (fitted.min.x + fitted.max.x) / 2;
+  model.position.z -= (fitted.min.z + fitted.max.z) / 2;
+  group.add(model);
+
+  const paintMats = [];
+  const seen = new Map();
+  model.traverse((node) => {
+    if (!node.isMesh || !node.material) return;
+    const list = Array.isArray(node.material) ? node.material : [node.material];
+    const next = list.map((mat) => {
+      if (!mat || !/paint/i.test(mat.name || '')) return mat;
+      if (!seen.has(mat.uuid)) {
+        const created = clearcoatPaint(hex, mat);
+        created.name = mat.name;
+        seen.set(mat.uuid, created);
+        paintMats.push(created);
+      }
+      return seen.get(mat.uuid);
+    });
+    node.material = Array.isArray(node.material) ? next : next[0];
+    const applied = Array.isArray(node.material) ? node.material : [node.material];
+    for (const mat of applied) {
+      if (mat && mat.transmission > 0) {
+        mat.transmission = 0;
+        mat.transparent = true;
+        mat.opacity = 0.45;
+        mat.depthWrite = false;
+        mat.envMapIntensity = 1.4;
+      }
+    }
+    const glass = /glass/i.test(node.material?.name || node.name || '');
+    node.castShadow = !glass;
+    node.receiveShadow = !glass;
+  });
+
+  const spins = [];
+  const steers = [];
+  model.traverse((node) => {
+    if (!node.name) return;
+    if (/^wheel_(FL|FR|RL|RR)$/.test(node.name)) {
+      spins.push({ node, baseX: node.rotation.x });
+    }
+    if (/^steer_(FL|FR)$/.test(node.name)) {
+      steers.push({ node, baseY: node.rotation.y });
+    }
+  });
+  if (!steers.length) {
+    for (const spin of spins) {
+      if (/FL|FR/.test(spin.node.name)) steers.push({ node: spin.node, baseY: spin.node.rotation.y });
+    }
+  }
+
+  const height = new THREE.Box3().setFromObject(group).getSize(new THREE.Vector3()).y;
+  return {
+    group,
+    bodyMat: paintMats[0] || clearcoatPaint(hex),
+    paintMats,
+    roofY: Math.max(1.05, height * 0.92),
+    spins,
+    steers,
+    groundY: 0.12,
+    yawOffset: 0,
+    shared: true,
+    wheels: [],
+    front: [],
+  };
+}
+
+export function createVehicle(spec, hex, template) {
+  const built = template ? buildFromTemplate(template, hex) : (BUILDERS[spec.id] || buildBreeze)(hex);
   const wheels = [];
   const front = [];
-  const spots = [
-    { x: 1.15, z: 0.78, steer: true },
-    { x: 1.15, z: -0.78, steer: true },
-    { x: -1.15, z: 0.78, steer: false },
-    { x: -1.15, z: -0.78, steer: false },
-  ];
-  for (const spot of spots) {
-    const pivot = new THREE.Group();
-    pivot.position.set(spot.x, 0.12 + WHEEL_R, spot.z);
-    const mesh = wheelMesh();
-    pivot.add(mesh);
-    built.group.add(pivot);
-    wheels.push(mesh);
-    if (spot.steer) front.push(pivot);
+  if (!template) {
+    const spots = [
+      { x: 1.15, z: 0.78, steer: true },
+      { x: 1.15, z: -0.78, steer: true },
+      { x: -1.15, z: 0.78, steer: false },
+      { x: -1.15, z: -0.78, steer: false },
+    ];
+    for (const spot of spots) {
+      const pivot = new THREE.Group();
+      pivot.position.set(spot.x, 0.12 + WHEEL_R, spot.z);
+      const mesh = wheelMesh();
+      pivot.add(mesh);
+      built.group.add(pivot);
+      wheels.push(mesh);
+      if (spot.steer) front.push(pivot);
+    }
+    built.group.traverse((node) => {
+      if (!node.isMesh) return;
+      node.castShadow = !node.userData.noShadow;
+      node.receiveShadow = !node.userData.noShadow;
+    });
   }
-  built.group.traverse((node) => {
-    if (!node.isMesh) return;
-    node.castShadow = !node.userData.noShadow;
-    node.receiveShadow = !node.userData.noShadow;
-  });
   return {
     spec,
     group: built.group,
     bodyMat: built.bodyMat,
+    paintMats: built.paintMats || [],
     roofY: built.roofY,
     wheels,
     front,
+    spins: built.spins || null,
+    steers: built.steers || null,
+    groundY: built.groundY || 0,
+    yawOffset: built.yawOffset || 0,
+    shared: Boolean(built.shared),
     x: 0,
     z: 0,
     yaw: 0,
@@ -220,6 +322,10 @@ export function setCargo(vehicle, on) {
 }
 
 export function disposeVehicle(vehicle) {
+  if (vehicle.shared) {
+    vehicle.paintMats?.forEach((material) => material.dispose());
+    return;
+  }
   disposeTree(vehicle.group);
 }
 
@@ -315,8 +421,13 @@ export function updateVehicle(vehicle, dt, input, boxes, options = {}) {
 }
 
 export function syncVehicle(vehicle, steer = 0) {
-  vehicle.group.position.set(vehicle.x, 0, vehicle.z);
-  vehicle.group.rotation.y = -vehicle.yaw;
+  vehicle.group.position.set(vehicle.x, vehicle.groundY || 0, vehicle.z);
+  vehicle.group.rotation.y = -vehicle.yaw + (vehicle.yawOffset || 0);
+  if (vehicle.spins) {
+    for (const wheel of vehicle.spins) wheel.node.rotation.x = wheel.baseX + vehicle.spin;
+    for (const front of vehicle.steers) front.node.rotation.y = front.baseY + steer * 0.42;
+    return;
+  }
   for (const wheel of vehicle.wheels) wheel.rotation.x = vehicle.spin;
   for (const pivot of vehicle.front) pivot.rotation.y = steer * 0.38;
 }

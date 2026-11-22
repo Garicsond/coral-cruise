@@ -27,6 +27,17 @@ export function createUI(handlers) {
   $('gfx-low').addEventListener('click', () => handlers.onQuality('low'));
 
   return {
+    setLoad(ratio, label) {
+      const bar = $('load-bar');
+      const wrap = $('load');
+      const amount = Math.max(0, Math.min(1, ratio));
+      if (wrap.hidden && amount < 1) return;
+      bar.style.width = `${Math.round(amount * 100)}%`;
+      $('load-label').textContent = label;
+      const done = amount >= 1;
+      wrap.hidden = done;
+      $('play-btn').disabled = !done;
+    },
     setReady(message) {
       document.body.classList.add('ready');
       const err = $('boot-error');

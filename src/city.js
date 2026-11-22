@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { box, cone, cylinder, mergeSolid, makeLabel } from './geom.js';
-import { createTextures } from './textures.js';
+import { createWaterNormal } from './textures.js';
 import {
   BRIDGES,
   CANAL,
@@ -33,7 +33,7 @@ function mountRoads(roads, marks) {
   };
 
   for (const z of ROAD_ZS) {
-    const color = z === -96 ? '#f0e4d6' : '#e7eef3';
+    const color = '#ffffff';
     for (let i = 0; i < ROAD_XS.length - 1; i += 1) {
       const a = ROAD_XS[i] + half;
       const b = ROAD_XS[i + 1] - half;
@@ -63,7 +63,7 @@ function mountRoads(roads, marks) {
   for (const x of ROAD_XS) {
     for (const z of ROAD_ZS) {
       if (z === 0 && x > CANAL.x0 && x < CANAL.x1) continue;
-      roads.push(roadPiece(x, z, ROAD_W, ROAD_W, z === -96 ? '#f0e4d6' : '#e7eef3'));
+      roads.push(roadPiece(x, z, ROAD_W, ROAD_W, '#ffffff'));
     }
   }
 
@@ -107,24 +107,87 @@ function addBuilding(facades, trim, building) {
   }
 }
 
-function addSidewalks(walks) {
+function addSidewalks(walks, curbs) {
   for (let j = 0; j < 4; j += 1) {
     for (let i = 0; i < 4; i += 1) {
       const block = blockBounds(i, j);
       const width = block.x1 - block.x0;
       const depth = block.z1 - block.z0;
       if (width < 8 || depth < 8) continue;
-      const thickness = Math.min(2.1, width * 0.22, depth * 0.22);
+      const walkW = Math.min(2.7, width * 0.28, depth * 0.28);
+      const curbW = 0.36;
       const cx = (block.x0 + block.x1) / 2;
       const cz = (block.z0 + block.z1) / 2;
-      walks.push(box(width, 0.08, thickness, cx, 0.045, block.z0 + thickness / 2, '#ffffff', 2.2));
-      walks.push(box(width, 0.08, thickness, cx, 0.045, block.z1 - thickness / 2, '#ffffff', 2.2));
-      const sideDepth = depth - thickness * 2;
-      if (sideDepth > 1) {
-        walks.push(box(thickness, 0.08, sideDepth, block.x0 + thickness / 2, 0.045, cz, '#ffffff', 2.2));
-        walks.push(box(thickness, 0.08, sideDepth, block.x1 - thickness / 2, 0.045, cz, '#ffffff', 2.2));
+      walks.push(box(width, 0.16, walkW, cx, 0.08, block.z0 + walkW / 2, '#ffffff', 2));
+      walks.push(box(width, 0.16, walkW, cx, 0.08, block.z1 - walkW / 2, '#ffffff', 2));
+      curbs.push(box(width, 0.24, curbW, cx, 0.12, block.z0 + curbW / 2, '#f2f2f2', 1));
+      curbs.push(box(width, 0.24, curbW, cx, 0.12, block.z1 - curbW / 2, '#f2f2f2', 1));
+      const side = depth - walkW * 2;
+      if (side > 1.2) {
+        walks.push(box(walkW, 0.16, side, block.x0 + walkW / 2, 0.08, cz, '#ffffff', 2));
+        walks.push(box(walkW, 0.16, side, block.x1 - walkW / 2, 0.08, cz, '#ffffff', 2));
+        curbs.push(box(curbW, 0.24, side, block.x0 + curbW / 2, 0.12, cz, '#f2f2f2', 1));
+        curbs.push(box(curbW, 0.24, side, block.x1 - curbW / 2, 0.12, cz, '#f2f2f2', 1));
       }
     }
+  }
+}
+
+function placeFitted(template, x, z, maxW, maxD, yaw = 0, castShadow = false) {
+  const model = template.clone(true);
+  model.rotation.y = yaw;
+  model.updateMatrixWorld(true);
+  const raw = new THREE.Box3().setFromObject(model);
+  const size = raw.getSize(new THREE.Vector3());
+  const scale = Math.min(maxW / Math.max(size.x, 0.01), maxD / Math.max(size.z, 0.01)) * 0.94;
+  model.scale.setScalar(scale);
+  model.updateMatrixWorld(true);
+  const fitted = new THREE.Box3().setFromObject(model);
+  model.position.x -= (fitted.min.x + fitted.max.x) / 2 - x;
+  model.position.z -= (fitted.min.z + fitted.max.z) / 2 - z;
+  model.position.y -= fitted.min.y;
+  model.traverse((node) => {
+    if (!node.isMesh) return;
+    node.castShadow = castShadow;
+    node.receiveShadow = true;
+  });
+  return model;
+}
+
+function placeBuildings(scene, buildings, models, castShadow) {
+  buildings.forEach((building, index) => {
+    let key = 'apartment';
+    if (building.kind === 'hotel') key = 'motel';
+    else if (building.w < 12 && building.h > 11) key = 'pencil';
+    else if (building.h > 13) key = index % 2 === 0 ? 'tower' : 'apartment';
+    else key = index % 2 === 0 ? 'apartment' : 'motel';
+    const template = models[key] || models.apartment;
+    scene.add(placeFitted(template, building.x, building.z, building.w * 0.98, building.d * 0.98, (index % 4) * 0.15, castShadow));
+    if (building.kind === 'hotel') {
+      const label = makeLabel(building.name);
+      label.position.set(building.x, 16, building.z);
+      scene.add(label);
+    }
+  });
+}
+
+function placePalms(scene, template, palms) {
+  const chosen = palms.filter((palm, index) => palm.z < -108 || index % 6 === 0).slice(0, 14);
+  if (!chosen.length || !template) return;
+  const probe = template.clone(true);
+  const height = new THREE.Box3().setFromObject(probe).getSize(new THREE.Vector3()).y || 5;
+  for (const palm of chosen) {
+    const tree = template.clone(true);
+    const scale = (7.4 / height) * (0.82 + (palm.scale || 1) * 0.2);
+    tree.scale.setScalar(scale);
+    tree.rotation.y = palm.rot || 0;
+    tree.position.set(palm.x, 0, palm.z);
+    tree.traverse((node) => {
+      if (!node.isMesh) return;
+      node.castShadow = false;
+      node.receiveShadow = true;
+    });
+    scene.add(tree);
   }
 }
 
@@ -337,13 +400,9 @@ function addMerged(scene, geometries, material, { cast = false, receive = true }
   return mesh;
 }
 
-export function mountCity(scene, world, { renderer, preset }) {
-  const textures = createTextures(preset.anisotropy);
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const env = pmrem.fromEquirectangular(textures.environment);
-  scene.environment = env.texture;
-  textures.environment.dispose();
-  pmrem.dispose();
+export function mountCity(scene, world, { preset, maps, models, envMap }) {
+  const waterNormal = createWaterNormal();
+  if (envMap) scene.environment = envMap;
 
   if (preset.sky) {
     const sky = new Sky();
@@ -376,30 +435,31 @@ export function mountCity(scene, world, { renderer, preset }) {
   sun.shadow.camera.far = 90;
   scene.add(hemi, sun, sun.target);
 
+  const sandMat = new THREE.MeshStandardMaterial({
+    map: maps.sand.map,
+    normalMap: maps.sand.normalMap,
+    roughnessMap: maps.sand.roughnessMap,
+    roughness: 1,
+    metalness: 0,
+  });
+  maps.sand.map.repeat.set(14, 10);
+  maps.sand.normalMap.repeat.copy(maps.sand.map.repeat);
+  maps.sand.roughnessMap.repeat.copy(maps.sand.map.repeat);
+
   const groundGeo = new THREE.PlaneGeometry(460, 360);
   groundGeo.rotateX(-Math.PI / 2);
-  const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({
-    map: textures.ground,
-    roughness: 0.95,
-    metalness: 0,
-  }));
+  const ground = new THREE.Mesh(groundGeo, sandMat);
   ground.receiveShadow = true;
   scene.add(ground);
-  textures.ground.repeat.set(18, 14);
 
   const sandGeo = new THREE.PlaneGeometry(260, 52);
   sandGeo.rotateX(-Math.PI / 2);
-  const sand = new THREE.Mesh(sandGeo, new THREE.MeshStandardMaterial({
-    map: textures.sand,
-    roughness: 0.96,
-    metalness: 0,
-  }));
+  const sand = new THREE.Mesh(sandGeo, sandMat);
   sand.position.set(0, 0.02, -124);
   sand.receiveShadow = true;
   scene.add(sand);
-  textures.sand.repeat.set(10, 3);
 
-  const waterMat = makeWaterMaterial(textures.waterNormal);
+  const waterMat = makeWaterMaterial(waterNormal);
   const oceanGeo = new THREE.PlaneGeometry(640, 260, preset.waterSegX, preset.waterSegY);
   oceanGeo.rotateX(-Math.PI / 2);
   const ocean = new THREE.Mesh(oceanGeo, waterMat);
@@ -414,60 +474,61 @@ export function mountCity(scene, world, { renderer, preset }) {
 
   const roads = [];
   const marks = [];
-  const facades = [];
   const trim = [];
   const walks = [];
+  const curbs = [];
   mountRoads(roads, marks);
-  addSidewalks(walks);
+  addSidewalks(walks, curbs);
   addRails(trim);
   addPier(scene, trim);
-  for (const building of world.buildings) {
-    addBuilding(facades, trim, building);
-    if (building.kind === 'hotel') {
-      const label = makeLabel(building.name);
-      label.position.set(building.x, 28, building.z);
-      scene.add(label);
-    }
-  }
   for (const mark of world.landmarks) addLandmark(scene, trim, mark);
+  const castBuildings = Boolean(preset.shadowSoft);
+  placeBuildings(scene, world.buildings, models, castBuildings);
+  placePalms(scene, models.palm, world.palms);
+
+  const concrete = new THREE.MeshStandardMaterial({
+    map: maps.concrete.map,
+    normalMap: maps.concrete.normalMap,
+    roughnessMap: maps.concrete.roughnessMap,
+    roughness: 1,
+    metalness: 0.02,
+  });
+  const curbMat = concrete.clone();
+  curbMat.color.set('#d5d0c8');
 
   addMerged(scene, roads, new THREE.MeshStandardMaterial({
-    map: textures.asphalt,
+    map: maps.asphalt.map,
+    normalMap: maps.asphalt.normalMap,
+    roughnessMap: maps.asphalt.roughnessMap,
     vertexColors: true,
-    roughness: 0.92,
-    metalness: 0.02,
+    roughness: 1,
+    metalness: 0.04,
+    normalScale: new THREE.Vector2(0.7, 0.7),
   }), { receive: true });
-  addMerged(scene, walks, new THREE.MeshStandardMaterial({
-    map: textures.sidewalk,
-    roughness: 0.88,
-    metalness: 0,
-  }), { receive: true });
-  addMerged(scene, facades, new THREE.MeshStandardMaterial({
-    map: textures.facade,
+  addMerged(scene, walks, concrete, { receive: true });
+  addMerged(scene, curbs, curbMat, { cast: true, receive: true });
+  addMerged(scene, trim, new THREE.MeshStandardMaterial({
     vertexColors: true,
-    roughness: 0.74,
-    metalness: 0.02,
+    roughness: 0.62,
+    metalness: 0.04,
     envMapIntensity: 0.4,
   }), { cast: true, receive: true });
-  addMerged(scene, trim, new THREE.MeshStandardMaterial({
-    map: textures.plaster,
-    vertexColors: true,
-    roughness: 0.68,
-    metalness: 0.03,
-    envMapIntensity: 0.35,
-  }), { cast: true, receive: true });
   addMerged(scene, marks, new THREE.MeshStandardMaterial({
-    color: '#f4e7b0',
-    roughness: 0.55,
+    color: '#f7f7f4',
+    roughness: 0.45,
     metalness: 0,
-    emissive: '#f4e7b0',
-    emissiveIntensity: 0.18,
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -2,
   }), { receive: true });
 
-  addPalms(scene, world.palms, textures.frond);
+  const foam = new THREE.Mesh(
+    new THREE.PlaneGeometry(250, 7),
+    new THREE.MeshBasicMaterial({ color: '#f7fbff', transparent: true, opacity: 0.42, depthWrite: false }),
+  );
+  foam.rotation.x = -Math.PI / 2;
+  foam.position.set(0, -0.82, -148);
+  scene.add(foam);
 
   const clouds = [];
   const cloudMat = new THREE.MeshStandardMaterial({ color: '#fffdf8', roughness: 0.95, metalness: 0 });
@@ -492,7 +553,7 @@ export function mountCity(scene, world, { renderer, preset }) {
     tick(time) {
       const shader = waterMat.userData.shader;
       if (shader) shader.uniforms.uTime.value = time;
-      textures.waterNormal.offset.set((time * 0.018) % 1, (time * 0.011) % 1);
+      waterNormal.offset.set((time * 0.018) % 1, (time * 0.011) % 1);
     },
     updateSun(focus) {
       const distance = 40;

@@ -349,6 +349,27 @@ h1 {
 
 #wallet { font-weight: 800; }
 
+.load-track {
+  height: 8px;
+  background: #efe4d8;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+#load-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--coral);
+}
+
+#load-label {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #45616c;
+}
+
 .gfx {
   display: flex;
   gap: 8px;
@@ -402,6 +423,17 @@ h1 {
   place-items: center;
   padding: 12px;
   background: rgba(20, 44, 56, 0.4);
+}
+
+#garage {
+  place-items: center start;
+  background: linear-gradient(90deg, rgba(20, 44, 56, 0.34), rgba(20, 44, 56, 0.02) 58%, transparent);
+  pointer-events: none;
+}
+
+#garage .sheet {
+  pointer-events: auto;
+  width: min(400px, 48vw);
 }
 
 .sheet {

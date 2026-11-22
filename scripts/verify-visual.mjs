@@ -130,6 +130,13 @@ try {
   await page.waitForTimeout(200);
   await page.screenshot({ path: `${outDir}/coral-street.png` });
 
+  await page.click('#garage-btn');
+  await page.waitForFunction(() => window.__coral.getState().mode === 'garage');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${outDir}/coral-garage.png` });
+  await page.click('#garage-close');
+  await page.waitForFunction(() => window.__coral.getState().mode === 'play');
+
   const photo = await page.evaluate(() => window.__coral.missions.find((mission) => mission.id === 'postcard'));
   await driveTo(0, -96, 4);
   await driveTo(-60, -96, 4);
