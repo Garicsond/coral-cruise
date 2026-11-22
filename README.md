@@ -53,7 +53,9 @@ npm run preview
 
 ## Deploy
 
-Pushes to `main` run `.github/workflows/pages.yml`, which builds the static site and deploys it with GitHub Pages (source: GitHub Actions). The site is a Vite build of plain ES modules. There is no backend.
+Pushes to `main` run `.github/workflows/pages.yml`, which builds the static site and deploys it with GitHub Pages. The site is a Vite build of plain ES modules. There is no backend. Asset URLs are rooted at `/coral-cruise/`.
+
+Pages has to be turned on once for this repository, with **Source: GitHub Actions** (Settings → Pages → Build and deployment). The automation token used to land this project cannot change that setting (`403 Resource not accessible by integration`), so the first deploy stopped with "Ensure GitHub Pages has been enabled." After that switch is on, re-run the workflow. Later pushes to `main` publish https://garicsond.github.io/coral-cruise/ on their own.
 
 ## Credits
 
