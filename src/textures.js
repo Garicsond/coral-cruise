@@ -168,6 +168,10 @@ export function createTextures(anisotropy = 4) {
   return { asphalt, sand, sidewalk, plaster, facade, ground, waterNormal, frond, environment };
 }
 
+export function createWaterNormal() {
+  return waterNormalMap();
+}
+
 function waterNormalMap() {
   const size = 256;
   const heights = new Float32Array(size * size);

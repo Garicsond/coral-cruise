@@ -60,7 +60,6 @@ Pages has to be turned on once for this repository, with **Source: GitHub Action
 
 ## Credits
 
-- City, cars, props, and interface are original geometry. No ripped models, logos, or brand assets.
-- Asphalt, sand, sidewalk, plaster, window grids, palm fronds, the water normal map, and the reflection image are generated in the browser. No image files are downloaded, so no CC0 texture pack was needed.
+- Cars, buildings, and palms are CC0 models. Roads, sidewalks, curbs, and sand use CC0 photos from Poly Haven. The full list, with links and licenses, is in [CREDITS.md](CREDITS.md).
 - All audio (engine, music loop, UI blips, bump) is synthesized with the Web Audio API. No audio files are shipped.
-- [Three.js](https://threejs.org/) (MIT) renders the scene and is bundled at build time. The High sky uses Three.js's `Sky` shader, the Preetham daylight model as integrated by zz85 from work by Simon Wallner and Martin Upitis.
+- [Three.js](https://threejs.org/) (MIT) renders the scene and is bundled at build time. The High sky uses Three.js's `Sky` shader, the Preetham daylight model as integrated by zz85 from work by Simon Wallner and Martin Upitis. High also uses a 1K Poly Haven HDRI for reflections.

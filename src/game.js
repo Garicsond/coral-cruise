@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { loadGameAssets } from './assets.js';
 import { AudioBus } from './audio.js';
 import { createVehicle, disposeVehicle, placeVehicle, setCargo, updateVehicle } from './car.js';
 import { carById, colorById, COLORS, CARS, SHELL_VALUE } from './catalog.js';
@@ -61,7 +62,7 @@ class Game {
     this.fpsStamp = 0;
   }
 
-  init() {
+  async init() {
     const level = resolveQuality(this.save.quality);
     this.preset = presetFor(level);
     const canvas = document.getElementById('view');
@@ -82,7 +83,25 @@ class Game {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(62, 1, 0.1, 480);
     this.world = createWorld(11);
-    this.city = mountCity(this.scene, this.world, { renderer: this.renderer, preset: this.preset });
+    this.ui.setLoad(0.04, 'Loading Coral Vista…');
+    let assets;
+    try {
+      assets = await loadGameAssets(this.renderer, this.preset, (progress) => {
+        this.ui.setLoad(progress, 'Loading Coral Vista…');
+      });
+    } catch {
+      this.ui.setReady('The city assets could not be loaded.');
+      return;
+    }
+    this.library = assets;
+    if (assets.envMap) this.scene.environment = assets.envMap;
+    this.city = mountCity(this.scene, this.world, {
+      renderer: this.renderer,
+      preset: this.preset,
+      maps: assets.maps,
+      models: assets.models,
+      envMap: assets.envMap,
+    });
     this.spawnCar();
     this.buildActivities();
     this.input.attachTouch();
@@ -90,6 +109,7 @@ class Game {
     this.ui.setGraphics(this.preset.level);
     this.ui.setWallet(`Wallet ${money(this.save.cash)} · ${carById(this.save.car).name}`);
     this.ui.setMode('menu');
+    this.ui.setLoad(1, 'Ready');
     this.resize();
     window.addEventListener('resize', () => this.resize());
     window.visualViewport?.addEventListener('resize', () => this.resize());
@@ -117,7 +137,7 @@ class Game {
     }
     const spec = carById(this.save.car);
     const color = colorById(this.save.color);
-    this.car = createVehicle(spec, color.hex);
+    this.car = createVehicle(spec, color.hex, this.library?.models?.[spec.id]);
     const pose = this.pose || SPAWN;
     placeVehicle(this.car, pose.x, pose.z, pose.yaw ?? 0);
     this.car.speed = 0;
@@ -272,6 +292,8 @@ class Game {
       const drift = time * 0.18;
       this.camera.position.set(-52 + Math.sin(drift) * 12, 30, -132);
       this.camera.lookAt(16, 3, -46);
+    } else if (this.mode === 'garage') {
+      this.updateGarageCamera();
     } else {
       this.updateChase(dt);
     }
@@ -547,6 +569,17 @@ class Game {
     this.lookY += (1.2 - this.lookY) * k;
     this.lookZ += (this.car.z + Math.sin(this.car.yaw) * 7 - this.lookZ) * k;
     this.applyCamera();
+  }
+
+  updateGarageCamera() {
+    const ang = this.car.yaw + 0.9;
+    const dist = 6.4;
+    this.camera.position.set(
+      this.car.x + Math.cos(ang) * dist,
+      1.85,
+      this.car.z + Math.sin(ang) * dist,
+    );
+    this.camera.lookAt(this.car.x, 0.85, this.car.z);
   }
 
   applyCamera() {
